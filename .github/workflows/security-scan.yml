@@ -2,50 +2,28 @@ name: Security Scan
 
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
-  security-scan:
+  scan:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
-      security-events: write  # Required for SARIF upload
-      
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'  # Adjust to your Node version
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci  # Use 'npm ci' for CI (faster, uses package-lock.json)
-        # Or use 'npm install' if you don't have package-lock.json
-      
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
-          scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
       
-      - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()  # Upload even if scan finds issues
+      - name: Upload to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
-      
-      - name: Show results in logs (optional)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
