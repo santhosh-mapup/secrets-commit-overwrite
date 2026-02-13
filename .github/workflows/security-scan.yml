@@ -99,7 +99,6 @@ jobs:
                 select(.Vulnerabilities != null) | 
                 .Target as $target | 
                 .Vulnerabilities[] | 
-                select(.Severity == "CRITICAL" or .Severity == "HIGH") | 
                 [
                   "#### \(.Severity): \(.VulnerabilityID)",
                   "- **File:** \($target)",
@@ -109,7 +108,7 @@ jobs:
                   "- **Reference:** [\(.VulnerabilityID)](\(.PrimaryURL // "#"))",
                   "",
                   "---"
-                ] | join("\n")' trivy-results.json 2>/dev/null || echo "No critical or high vulnerabilities found"
+                ] | join("\n")' trivy-results.json 2>/dev/null || echo "No vulnerabilities found"
               
             } >> $GITHUB_STEP_SUMMARY
           fi
