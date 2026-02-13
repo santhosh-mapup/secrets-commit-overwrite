@@ -2,54 +2,77 @@ name: Security Scan
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
   workflow_dispatch:
 
 permissions:
   contents: read
-  security-events: write
   actions: read
 
 jobs:
   trivy-scan:
-    name: Trivy Security Scan
+    name: Trivy Security Scanner
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-      - name: Run Trivy vulnerability scanner in filesystem mode
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           exit-code: 0
       
-      - name: Run Trivy to generate SARIF report
-        uses: aquasecurity/trivy-action@master
+      - name: Generate JSON report
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          format: 'json'
+          output: 'trivy-results.json'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
       
-      - name: Check if SARIF file exists
+      - name: Display Summary
+        if: always()
         run: |
-          if [ -f "trivy-results.sarif" ]; then
-            echo "✅ SARIF file created successfully"
-            ls -lh trivy-results.sarif
-            cat trivy-results.sarif
-          else
-            echo "❌ SARIF file not found - creating empty one"
-            echo '{"version":"2.1.0","runs":[]}' > trivy-results.sarif
+          echo "🔍 SECURITY SCAN COMPLETE"
+          echo "================================"
+          if [ -f "trivy-results.json" ]; then
+            CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo "0")
+            HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo "0")
+            MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json 2>/dev/null || echo "0")
+            LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="LOW")] | length' trivy-results.json 2>/dev/null || echo "0")
+            
+            echo "🔴 Critical: $CRITICAL"
+            echo "🟠 High: $HIGH"
+            echo "🟡 Medium: $MEDIUM"
+            echo "🔵 Low: $LOW"
+            echo ""
+            echo "📊 Full details in 'Run Trivy vulnerability scanner' step above"
+            
+            # GitHub Step Summary
+            {
+              echo "## 🔍 Security Scan Results"
+              echo ""
+              echo "| Severity | Count |"
+              echo "|----------|-------|"
+              echo "| 🔴 Critical | $CRITICAL |"
+              echo "| 🟠 High | $HIGH |"
+              echo "| 🟡 Medium | $MEDIUM |"
+              echo "| 🔵 Low | $LOW |"
+            } >> $GITHUB_STEP_SUMMARY
           fi
       
-      - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          name: security-scan-results
+          path: trivy-results.json
+          retention-days: 30
